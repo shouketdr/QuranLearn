@@ -69,17 +69,20 @@
     const getProxyUrl = (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
 
     async function init() {
-        renderBookmarks();
-        try {
-            const res = await fetch(getProxyUrl('https://api.quran.com/api/v4/chapters?language=en'));
-            const data = await res.json();
-            const parsed = JSON.parse(data.contents);
-            allSurahs = parsed.chapters;
-            renderList(allSurahs);
-        } catch (e) {
-            document.getElementById('surahList').innerHTML = "<p style='padding:20px'>Error loading list. Refresh.</p>";
-        }
+    renderBookmarks();
+    try {
+        // We are going directly to the source! 🎯
+        const res = await fetch('https://api.quran.com/api/v4/chapters?language=en');
+        const data = await res.json();
+        
+        // No more "data.contents" or "JSON.parse" needed here
+        allSurahs = data.chapters;
+        renderList(allSurahs);
+    } catch (e) {
+        console.error("Direct load failed", e);
+        document.getElementById('surahList').innerHTML = "Connection Error. Check console.";
     }
+}
 
     function renderList(list) {
         const cont = document.getElementById('surahList');
@@ -188,3 +191,4 @@
 </script>
 </body>
 </html>
+
