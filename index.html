@@ -139,6 +139,8 @@
         
         localStorage.setItem('quranBookmarks', JSON.stringify(bookmarks));
         renderBookmarks();
+        // Prevent event bubbling so translation doesn't toggle
+        event.stopPropagation();
         event.target.classList.toggle('active');
     }
 
