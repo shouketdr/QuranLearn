@@ -6,29 +6,27 @@
     <title>Quran Pro - Emerald Edition</title>
     <style>
         :root { --primary: #004d40; --secondary: #e0f2f1; --accent: #ffc107; }
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; display: flex; height: 100vh; background: #fff; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; display: flex; height: 100vh; background: #fff; }
         
-        /* Sidebar */
         #sidebar { width: 320px; border-right: 1px solid #ddd; display: flex; flex-direction: column; background: #fafafa; }
         .sb-header { padding: 20px; background: var(--primary); color: white; }
         .bookmark-section { padding: 10px 20px; background: #f0f0f0; font-size: 0.9rem; max-height: 150px; overflow-y: auto; border-bottom: 2px solid #ddd; }
         .bookmark-item { padding: 8px; border-bottom: 1px solid #ddd; cursor: pointer; display: flex; justify-content: space-between; background: white; margin-bottom: 5px; border-radius: 4px; }
+        
         .surah-list { overflow-y: auto; flex: 1; }
-        .surah-card { padding: 15px 20px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: 0.2s; }
+        .surah-card { padding: 15px 20px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
         .surah-card:hover, .surah-card.active { background: var(--secondary); }
 
-        /* Main Area */
         #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
         .top-bar { padding: 10px 25px; border-bottom: 1px solid #eee; display: flex; gap: 10px; align-items: center; background: white; }
         #reader { flex: 1; overflow-y: auto; padding: 20px 40px; scroll-behavior: smooth; }
         .reader-inner { max-width: 800px; margin: auto; }
 
-        /* Verse Styling */
         .bismillah { text-align: center; font-size: 2.2rem; margin: 30px 0; color: var(--primary); direction: rtl; }
         .ayah-box { padding: 25px 0; border-bottom: 1px solid #eee; position: relative; }
         .arabic { font-size: 2.2rem; text-align: right; direction: rtl; line-height: 2.5; color: #222; }
         .translation { display: none; font-size: 1.1rem; color: #444; padding: 15px; background: #f1f1f1; border-left: 4px solid var(--primary); margin-top: 10px; border-radius: 4px; }
-        .bookmark-btn { float: left; cursor: pointer; font-size: 1.5rem; color: #ccc; transition: 0.3s; margin-top: 10px; }
+        .bookmark-btn { float: left; cursor: pointer; font-size: 1.5rem; color: #ccc; margin-top: 10px; }
         .bookmark-btn.active { color: var(--accent); }
         .ayah-num { font-size: 1rem; color: #888; margin-right: 10px; }
         .loading { text-align: center; padding: 50px; font-style: italic; color: #666; }
@@ -64,39 +62,22 @@
 <script>
     let allSurahs = [];
     let bookmarks = JSON.parse(localStorage.getItem('quranBookmarks')) || [];
-    
-    // Using AllOrigins to bypass CORS issues on GitHub
-    const getProxyUrl = (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
 
+    // 1. INITIALIZE LIST
     async function init() {
-    renderBookmarks();
-    try {
-        // We are going directly to the source! 🎯
-        const res = await fetch('https://api.quran.com/api/v4/chapters?language=en');
-        const data = await res.json();
-        
-        // No more "data.contents" or "JSON.parse" needed here
-        allSurahs = data.chapters;
-        renderList(allSurahs);
-    } catch (e) {
-        console.error("Direct load failed", e);
-        document.getElementById('surahList').innerHTML = "Connection Error. Check console.";
-    }
-}
-
-    function renderList(list) {
-        const cont = document.getElementById('surahList');
-        cont.innerHTML = '';
-        list.forEach(s => {
-            const d = document.createElement('div');
-            d.className = 'surah-card';
-            d.id = `card-${s.id}`;
-            d.innerHTML = `<div><strong>${s.id}</strong>. ${s.name_simple}</div><div style="direction:rtl">${s.name_arabic}</div>`;
-            d.onclick = () => loadSurah(s.id, s.name_simple);
-            cont.appendChild(d);
-        });
+        renderBookmarks();
+        try {
+            const res = await fetch('https://api.quran.com/api/v4/chapters?language=en');
+            const data = await res.json();
+            allSurahs = data.chapters;
+            renderList(allSurahs);
+        } catch (e) {
+            console.error("Init Error:", e);
+            document.getElementById('surahList').innerHTML = "<p style='padding:20px'>Connection Error.</p>";
+        }
     }
 
+    // 2. LOAD SURAH CONTENT
     async function loadSurah(id, name) {
         document.querySelectorAll('.surah-card').forEach(el => el.classList.remove('active'));
         const activeCard = document.getElementById(`card-${id}`);
@@ -113,17 +94,20 @@
         try {
             do {
                 const url = `https://api.quran.com/api/v4/verses/by_chapter/${id}?language=en&translations=131&fields=text_uthmani&page=${page}&per_page=50`;
-                const res = await fetch(getProxyUrl(url));
+                const res = await fetch(url);
                 const data = await res.json();
-                const parsed = JSON.parse(data.contents);
-                allVerses = allVerses.concat(parsed.verses);
-                total = parsed.pagination.total_pages;
+                allVerses = allVerses.concat(data.verses);
+                total = data.pagination.total_pages;
                 page++;
             } while (page <= total);
             renderVerses(allVerses, id, name);
-        } catch (e) { reader.innerHTML = "Error loading data."; }
+        } catch (e) { 
+            console.error("Load Error:", e);
+            reader.innerHTML = "Error loading data."; 
+        }
     }
 
+    // 3. RENDER VERSES TO SCREEN
     function renderVerses(verses, sId, sName) {
         const reader = document.getElementById('readerInner');
         reader.innerHTML = (sId != 1 && sId != 9) ? `<div class="bismillah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>` : '';
@@ -142,6 +126,7 @@
         });
     }
 
+    // 4. UI HELPERS
     function toggleTrans(id) {
         const t = document.getElementById(`t-${id}`);
         t.style.display = (t.style.display === 'block') ? 'none' : 'block';
@@ -154,7 +139,6 @@
         
         localStorage.setItem('quranBookmarks', JSON.stringify(bookmarks));
         renderBookmarks();
-        // Update visual star immediately
         event.target.classList.toggle('active');
     }
 
@@ -182,6 +166,19 @@
         if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
+    function renderList(list) {
+        const cont = document.getElementById('surahList');
+        cont.innerHTML = '';
+        list.forEach(s => {
+            const d = document.createElement('div');
+            d.className = 'surah-card';
+            d.id = `card-${s.id}`;
+            d.innerHTML = `<div><strong>${s.id}</strong>. ${s.name_simple}</div><div style="direction:rtl">${s.name_arabic}</div>`;
+            d.onclick = () => loadSurah(s.id, s.name_simple);
+            cont.appendChild(d);
+        });
+    }
+
     document.getElementById('srchSurah').oninput = (e) => {
         const val = e.target.value.toLowerCase();
         renderList(allSurahs.filter(s => s.name_simple.toLowerCase().includes(val)));
@@ -191,4 +188,3 @@
 </script>
 </body>
 </html>
-
