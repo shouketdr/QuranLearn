@@ -65,120 +65,58 @@
 </div>
 
 <script>
+
     let allSurahs = [];
-    const proxy = "https://corsproxy.io/?"; 
+let bookmarks = JSON.parse(localStorage.getItem('quranBookmarks')) || [];
 
-    // Initial Load: Get all 114 Surahs
-    async function init() {
-        try {
-            const url = encodeURIComponent('https://api.quran.com/api/v4/chapters?language=en');
-            const res = await fetch(proxy + url);
+// NEW PROXY: AllOrigins is more reliable for GitHub Pages in 2026
+const getProxyUrl = (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+
+async function init() {
+    renderBookmarks();
+    try {
+        const apiUrl = 'https://api.quran.com/api/v4/chapters?language=en';
+        const res = await fetch(getProxyUrl(apiUrl));
+        const data = await res.json();
+        // AllOrigins wraps the result in a "contents" string, we must parse it
+        const parsedData = JSON.parse(data.contents);
+        allSurahs = parsedData.chapters;
+        renderList(allSurahs);
+    } catch (e) {
+        console.error("Load failed", e);
+        document.getElementById('surahList').innerHTML = "Connection Error. Try refreshing.";
+    }
+}
+
+async function loadSurah(id, name) {
+    document.querySelectorAll('.surah-card').forEach(el => el.classList.remove('active'));
+    const card = document.getElementById(`card-${id}`);
+    if(card) card.classList.add('active');
+    
+    document.getElementById('activeTitle').innerText = name;
+    const reader = document.getElementById('readerInner');
+    reader.innerHTML = '<div class="loading">Loading verses...</div>';
+    
+    let allVerses = [];
+    let page = 1;
+    let total = 1;
+
+    try {
+        do {
+            const apiUrl = `https://api.quran.com/api/v4/verses/by_chapter/${id}?language=en&translations=131&fields=text_uthmani&page=${page}&per_page=50`;
+            const res = await fetch(getProxyUrl(apiUrl));
             const data = await res.json();
-            allSurahs = data.chapters;
-            renderList(allSurahs);
-        } catch (e) {
-            document.getElementById('surahList').innerHTML = "<p style='padding:20px'>Failed to load list. Refresh.</p>";
-        }
+            const parsed = JSON.parse(data.contents);
+            
+            allVerses = allVerses.concat(parsed.verses);
+            total = parsed.pagination.total_pages;
+            page++;
+        } while (page <= total);
+        renderVerses(allVerses, id, name);
+    } catch (e) { 
+        reader.innerHTML = "Error loading verses. The API might be busy, please try again."; 
     }
-
-    function renderList(list) {
-        const cont = document.getElementById('surahList');
-        cont.innerHTML = '';
-        list.forEach(s => {
-            const d = document.createElement('div');
-            d.className = 'surah-card';
-            d.id = `card-${s.id}`;
-            d.innerHTML = `<div><strong>${s.id}</strong>. ${s.name_simple}</div> <div style="direction:rtl">${s.name_arabic}</div>`;
-            d.onclick = () => loadSurah(s.id, s.name_simple);
-            cont.appendChild(d);
-        });
-    }
-
-    // Main Function: Load all verses including pagination for large Surahs
-    async function loadSurah(id, name) {
-        // Highlight active surah in sidebar
-        document.querySelectorAll('.surah-card').forEach(el => el.classList.remove('active'));
-        document.getElementById(`card-${id}`).classList.add('active');
-
-        document.getElementById('activeTitle').innerText = name;
-        const reader = document.getElementById('readerInner');
-        reader.innerHTML = '<div class="loading">Loading verses (this may take a moment for large Surahs)...</div>';
-        
-        let allVerses = [];
-        let currentPage = 1;
-        let totalPages = 1;
-
-        try {
-            // Loop through all pages provided by the API
-            do {
-                const apiUrl = `https://api.quran.com/api/v4/verses/by_chapter/${id}?language=en&translations=131&fields=text_uthmani&page=${currentPage}&per_page=50`;
-                const res = await fetch(proxy + encodeURIComponent(apiUrl));
-                const data = await res.json();
-                
-                allVerses = allVerses.concat(data.verses);
-                totalPages = data.pagination.total_pages;
-                currentPage++;
-            } while (currentPage <= totalPages);
-
-            renderVerses(allVerses, id);
-        } catch (e) {
-            reader.innerHTML = `<div style="color:red; text-align:center; padding:50px;">Error loading data. Please check your connection or refresh the page.</div>`;
-        }
-    }
-
-    function renderVerses(verses, surahId) {
-        const reader = document.getElementById('readerInner');
-        reader.innerHTML = '';
-
-        // Handle Bismillah (Exclude Surah Fatiha (1) and At-Tawbah (9))
-        if (surahId != 1 && surahId != 9) {
-            const bism = document.createElement('div');
-            bism.className = 'bismillah';
-            bism.innerText = "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ";
-            reader.appendChild(bism);
-        }
-
-        verses.forEach(v => {
-            const box = document.createElement('div');
-            box.className = 'ayah-box';
-            box.id = `v-${v.verse_number}`;
-            box.innerHTML = `
-                <div class="arabic">
-                    <span class="ayah-num">${v.verse_number}</span>${v.text_uthmani}
-                </div>
-                <div class="translation" id="t-${v.id}">${v.translations[0].text}</div>
-            `;
-            // Toggle translation on click
-            box.onclick = () => {
-                const t = document.getElementById(`t-${v.id}`);
-                t.style.display = (t.style.display === 'block') ? 'none' : 'block';
-            };
-            reader.appendChild(box);
-        });
-    }
-
-    // Feature: Jump to specific verse number
-    function jumpToVerse() {
-        const val = document.getElementById('jumpAyah').value;
-        const target = document.getElementById(`v-${val}`);
-        if (target) {
-            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            target.style.transition = "background 0.5s";
-            target.style.background = "#fff9c4"; // Highlight color
-            setTimeout(() => target.style.background = "transparent", 2000);
-        } else {
-            alert("Verse not found. Make sure the Surah is fully loaded first.");
-        }
-    }
-
-    // Search Surah logic
-    document.getElementById('srchSurah').oninput = (e) => {
-        const query = e.target.value.toLowerCase();
-        const filtered = allSurahs.filter(s => s.name_simple.toLowerCase().includes(query));
-        renderList(filtered);
-    };
-
-    init();
+}
 </script>
 
 </body>
@@ -314,3 +252,4 @@
 </body>
 
 </html>
+
